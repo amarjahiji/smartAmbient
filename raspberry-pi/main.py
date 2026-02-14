@@ -21,7 +21,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger('SmartAmbient')
 
-from hub import app, init_mqtt, config
+from hub import app, init_mqtt, config, register_with_backend
 
 def signal_handler(sig, frame):
     """Handle shutdown signals gracefully"""
@@ -39,6 +39,9 @@ def main():
     logger.info("=" * 50)
 
     try:
+        # Register with cloud backend
+        register_with_backend()
+
         # Initialize MQTT
         if not init_mqtt():
             logger.error("Failed to initialize MQTT, exiting")

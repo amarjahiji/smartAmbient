@@ -6,11 +6,14 @@ Controls 3 individual LEDs (Red, Yellow, Green) via ESP32
 import json
 import logging
 import os
+import socket
 import threading
 import time
+import uuid
 from pathlib import Path
 
 import paho.mqtt.client as mqtt
+import requests
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 
@@ -50,11 +53,82 @@ def load_config():
 
 config = load_config()
 
+# Cloud API settings
+CLOUD_API_URL = config.get("cloud_api_url", "http://localhost:8080")
+
 # MQTT settings
 MQTT_BROKER = config.get("mqtt", {}).get("broker", "localhost")
 MQTT_PORT = config.get("mqtt", {}).get("port", 1883)
 MQTT_TOPIC_COMMAND = config.get("mqtt", {}).get("topic_command", "smartambient/led/command")
 MQTT_TOPIC_STATUS = config.get("mqtt", {}).get("topic_status", "smartambient/led/status")
+
+
+def get_mac_address():
+    """Get the MAC address of this device"""
+    mac = uuid.getnode()
+    return ':'.join(f'{(mac >> i) & 0xFF:02x}' for i in range(40, -1, -8))
+
+
+def get_ip_address():
+    """Get the local IP address of this device"""
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        return "unknown"
+
+
+def save_config():
+    """Save current config back to config.json"""
+    with open(CONFIG_PATH, 'w') as f:
+        json.dump(config, f, indent=4)
+
+
+def register_with_backend():
+    """Register this Pi hub with the cloud backend"""
+    api_key = config.get("device_api_key", "")
+    if api_key:
+        logger.info("Device already registered (API key found in config)")
+        return True
+
+    mac = get_mac_address()
+    ip = get_ip_address()
+    device_name = config.get("device_name", "SmartAmbient-Pi-Hub")
+
+    payload = {
+        "deviceName": device_name,
+        "deviceType": "RASPBERRY_PI",
+        "macAddress": mac,
+        "ipAddress": ip,
+        "firmwareVersion": "1.0.0",
+        "capabilities": "mqtt_broker,led_hub,flask_api"
+    }
+
+    try:
+        logger.info(f"Registering with backend at {CLOUD_API_URL}/api/devices/register")
+        resp = requests.post(
+            f"{CLOUD_API_URL}/api/devices/register",
+            json=payload,
+            headers={"X-Device-Api-Key": "registering"},
+            timeout=10
+        )
+        resp.raise_for_status()
+        data = resp.json()
+
+        config["device_api_key"] = data.get("apiKey", "")
+        save_config()
+        logger.info(f"Registered successfully. Device ID: {data.get('id')}")
+        return True
+    except requests.exceptions.ConnectionError:
+        logger.warning("Could not reach backend — will retry on next startup")
+        return False
+    except Exception as e:
+        logger.error(f"Registration failed: {e}")
+        return False
+
 
 # LED state - simple booleans for each LED
 led_state = {
