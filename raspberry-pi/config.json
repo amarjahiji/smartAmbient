@@ -1,27 +1,17 @@
 {
     "device_name": "SmartAmbient-Pi-Hub",
-    "cloud_api_url": "http://YOUR_CLOUD_IP:8080",
+    "cloud_api_url": "http://192.168.1.18:8080",
     "device_api_key": "",
     "mqtt": {
-        "broker_host": "localhost",
-        "broker_port": 1883,
-        "topic_prefix": "smartambient",
-        "esp32_command_topic": "smartambient/esp32/command",
-        "esp32_response_topic": "smartambient/esp32/response",
-        "esp32_register_topic": "smartambient/esp32/register"
+        "broker": "localhost",
+        "port": 1883,
+        "topic_command": "smartambient/led/command",
+        "topic_status": "smartambient/led/status"
     },
-    "http": {
+    "flask": {
         "host": "0.0.0.0",
-        "port": 5000
-    },
-    "led_state": {
-        "on": false,
-        "red": 255,
-        "green": 255,
-        "blue": 255,
-        "brightness": 100,
-        "pattern": "solid",
-        "speed": 50
+        "port": 5000,
+        "debug": false
     }
 }
 
