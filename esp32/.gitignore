@@ -1,0 +1,29 @@
+# ==========================
+# ESP32 PlatformIO .gitignore
+# ==========================
+
+# PlatformIO
+.pio/
+.pioenvs/
+.piolibdeps/
+.clang_complete
+.gcc-flags.json
+
+# IDE
+.vscode/
+.idea/
+
+# Compiled files
+*.o
+*.obj
+*.elf
+*.bin
+*.hex
+*.map
+
+# Build directories
+build/
+cmake-build-*/
+
+# Logs
+*.log

@@ -1,0 +1,46 @@
+/**
+ * SmartAmbient ESP32 - Simplified 3-LED Controller
+ * Configuration Header
+ */
+
+#ifndef CONFIG_H
+#define CONFIG_H
+
+// ============================================
+// WiFi Configuration
+// ============================================
+#define WIFI_SSID "YOUR_WIFI_SSID"
+#define WIFI_PASSWORD "YOUR_WIFI_PASSWORD"
+
+// ============================================
+// MQTT Configuration
+// ============================================
+#define MQTT_BROKER_IP "192.168.1.100"  // Raspberry Pi IP address
+#define MQTT_BROKER_PORT 1883
+#define MQTT_CLIENT_ID "esp32-3led"
+
+// MQTT Topics
+#define MQTT_TOPIC_COMMAND "smartambient/led/command"
+#define MQTT_TOPIC_STATUS "smartambient/led/status"
+
+// ============================================
+// LED GPIO Configuration (3 Individual LEDs)
+// ============================================
+#define LED_RED_PIN 25      // Red LED GPIO pin
+#define LED_YELLOW_PIN 26   // Yellow LED GPIO pin
+#define LED_GREEN_PIN 27    // Green LED GPIO pin
+
+// ============================================
+// Device Information
+// ============================================
+#define DEVICE_NAME "SmartAmbient-3LED"
+#define FIRMWARE_VERSION "2.0.0"
+
+// ============================================
+// Timing Configuration
+// ============================================
+#define WIFI_CONNECT_TIMEOUT 30000    // 30 seconds
+#define MQTT_RECONNECT_DELAY 5000     // 5 seconds
+#define HEARTBEAT_INTERVAL 60000      // 1 minute
+
+#endif // CONFIG_H
