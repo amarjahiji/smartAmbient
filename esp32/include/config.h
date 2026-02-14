@@ -9,13 +9,13 @@
 // ============================================
 // WiFi Configuration
 // ============================================
-#define WIFI_SSID "YOUR_WIFI_SSID"
-#define WIFI_PASSWORD "YOUR_WIFI_PASSWORD"
+#define WIFI_SSID "Telekom-Jahiji_EXT"
+#define WIFI_PASSWORD "11112222"
 
 // ============================================
 // MQTT Configuration
 // ============================================
-#define MQTT_BROKER_IP "192.168.1.100"  // Raspberry Pi IP address
+#define MQTT_BROKER_IP "192.168.1.19"  // Raspberry Pi IP address
 #define MQTT_BROKER_PORT 1883
 #define MQTT_CLIENT_ID "esp32-3led"
 
@@ -26,9 +26,9 @@
 // ============================================
 // LED GPIO Configuration (3 Individual LEDs)
 // ============================================
-#define LED_RED_PIN 25      // Red LED GPIO pin
-#define LED_YELLOW_PIN 26   // Yellow LED GPIO pin
-#define LED_GREEN_PIN 27    // Green LED GPIO pin
+#define LED_RED_PIN 18      // Red LED GPIO pin
+#define LED_YELLOW_PIN 21   // Yellow LED GPIO pin
+#define LED_GREEN_PIN 19    // Green LED GPIO pin
 
 // ============================================
 // Device Information
