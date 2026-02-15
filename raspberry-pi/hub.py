@@ -686,6 +686,9 @@ def get_led_state():
 @app.route('/led/on', methods=['POST'])
 def turn_all_on():
     """Turn all LEDs on"""
+    if audio_active:
+        stop_audio_listening()
+        logger.info("Audio mode auto-stopped by manual LED command")
     success = send_command("on")
     log_command_to_backend("LED_TURN_ON", {"command": "on"}, success)
     if success:
@@ -703,6 +706,9 @@ def turn_all_on():
 @app.route('/led/off', methods=['POST'])
 def turn_all_off():
     """Turn all LEDs off"""
+    if audio_active:
+        stop_audio_listening()
+        logger.info("Audio mode auto-stopped by manual LED command")
     success = send_command("off")
     log_command_to_backend("LED_TURN_OFF", {"command": "off"}, success)
     if success:
@@ -732,6 +738,9 @@ def set_leds():
     All fields are optional - only provided fields will be changed
     """
     try:
+        if audio_active:
+            stop_audio_listening()
+            logger.info("Audio mode auto-stopped by manual LED command")
         data = request.get_json()
         if not data:
             return jsonify({
@@ -777,6 +786,9 @@ def set_leds():
 @app.route('/led/toggle/<led_name>', methods=['POST'])
 def toggle_led(led_name):
     """Toggle a specific LED"""
+    if audio_active:
+        stop_audio_listening()
+        logger.info("Audio mode auto-stopped by manual LED command")
     led_name = led_name.lower()
     
     if led_name not in ["red", "yellow", "green"]:
