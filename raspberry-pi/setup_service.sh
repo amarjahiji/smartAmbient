@@ -38,6 +38,7 @@ Wants=mosquitto.service
 Type=simple
 User=$USER
 WorkingDirectory=$SCRIPT_DIR
+ExecStartPre=/bin/bash $SCRIPT_DIR/install_deps.sh
 ExecStart=$SCRIPT_DIR/venv/bin/python $SCRIPT_DIR/main.py
 Restart=always
 RestartSec=10

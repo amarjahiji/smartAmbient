@@ -13,10 +13,8 @@ import time
 import uuid
 from pathlib import Path
 
-import numpy as np
 import paho.mqtt.client as mqtt
 import requests
-import sounddevice as sd
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 
