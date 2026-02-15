@@ -248,20 +248,10 @@ def classify_song_genre(song):
         prompt = (
             "You are a music classifier. Reply with only the index number.\n1: Rock\n2: Pop\n3: Jazz\n4: Classical\n5: Electronic\n6: Hip-Hop\n\nSong: {song}\nIndex:"
         )
-        prompt = (
-            f"Classify the following song into exactly one of these genres:\n"
-            f"1 - Rock\n"
-            f"2 - Pop\n"
-            f"3 - Jazz\n"
-            f"4 - Classical\n"
-            f"5 - Electronic\n"
-            f"6 - Hip-Hop\n\n"
-            f"Song: {song}\n\n"
-            f"Respond with ONLY the number (1-6), nothing else."
-        )
+        
 
         payload = {
-            "model": "llama3.2:1b",
+            "model": "llama3.2:3b",
             "prompt": prompt,
             "stream": False,
             "options": {
