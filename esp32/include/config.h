@@ -9,7 +9,7 @@
 // ============================================
 // WiFi Configuration
 // ============================================
-#define WIFI_SSID "Amar Jahiji's iPhone"
+#define WIFI_SSID "Amar Jahiji\xe2\x80\x99s iPhone"
 #define WIFI_PASSWORD "12345678"
 
 // ============================================

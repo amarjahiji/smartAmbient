@@ -79,6 +79,7 @@ void setupWiFi() {
     
     WiFi.mode(WIFI_STA);
     WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+    WiFi.setTxPower(WIFI_POWER_8_5dBm);  // Lower TX power to prevent brownout
     
     unsigned long startTime = millis();
     while (WiFi.status() != WL_CONNECTED) {
