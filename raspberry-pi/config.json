@@ -1,12 +1,15 @@
 {
     "device_name": "SmartAmbient-Pi-Hub",
+    "product_id": "SMART-AMBIENT-HUB-001",
+    "device_id": null,
     "cloud_api_url": "http://192.168.1.18:8080",
     "device_api_key": "Yuzlm6YBLBxgwQXqoIyz-Mi74kMXHQ4bSYsAAnqYc50",
     "mqtt": {
         "broker": "localhost",
         "port": 1883,
         "topic_command": "smartambient/led/command",
-        "topic_status": "smartambient/led/status"
+        "topic_status": "smartambient/led/status",
+        "topic_register": "smartambient/device/register"
     },
     "flask": {
         "host": "0.0.0.0",

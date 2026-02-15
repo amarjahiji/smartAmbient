@@ -45,7 +45,7 @@ public class DeviceController {
         if (userId == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
-        DeviceResponse response = deviceService.claimDevice(request.getDeviceId(), userId);
+        DeviceResponse response = deviceService.claimDevice(request.getProductId(), userId);
         return ResponseEntity.ok(response);
     }
     

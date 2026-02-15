@@ -11,7 +11,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class ClaimDeviceRequest {
-    
-    @NotBlank(message = "Device ID is required")
-    private String deviceId;
+
+    @NotBlank(message = "Product ID is required")
+    private String productId;
 }

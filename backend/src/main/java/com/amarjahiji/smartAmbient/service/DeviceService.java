@@ -18,7 +18,7 @@ public interface DeviceService {
     /**
      * Claim ownership of a device by a user
      */
-    DeviceResponse claimDevice(String deviceId, String userId);
+    DeviceResponse claimDevice(String productId, String userId);
     
     /**
      * Get device by ID

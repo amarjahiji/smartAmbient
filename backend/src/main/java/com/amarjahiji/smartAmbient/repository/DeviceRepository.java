@@ -12,7 +12,9 @@ public interface DeviceRepository extends JpaRepository<Device, String> {
     Optional<Device> findByMacAddress(String macAddress);
     
     Optional<Device> findByApiKey(String apiKey);
-    
+
+    Optional<Device> findByProductId(String productId);
+
     List<Device> findByOwnerId(String ownerId);
     
     List<Device> findByParentDeviceId(String parentDeviceId);
@@ -24,4 +26,6 @@ public interface DeviceRepository extends JpaRepository<Device, String> {
     boolean existsByMacAddress(String macAddress);
     
     boolean existsByApiKey(String apiKey);
+
+    boolean existsByProductId(String productId);
 }

@@ -22,6 +22,7 @@
 // MQTT Topics
 #define MQTT_TOPIC_COMMAND "smartambient/led/command"
 #define MQTT_TOPIC_STATUS "smartambient/led/status"
+#define MQTT_TOPIC_REGISTER "smartambient/device/register"
 
 // ============================================
 // LED GPIO Configuration (3 Individual LEDs)
@@ -34,7 +35,9 @@
 // Device Information
 // ============================================
 #define DEVICE_NAME "SmartAmbient-3LED"
+#define DEVICE_TYPE "ESP32"
 #define FIRMWARE_VERSION "2.0.0"
+#define DEVICE_CAPABILITIES "led_control,mqtt_client"
 
 // ============================================
 // Timing Configuration

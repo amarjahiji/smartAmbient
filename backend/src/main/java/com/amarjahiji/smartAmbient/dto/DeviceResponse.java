@@ -19,6 +19,7 @@ public class DeviceResponse {
     private String macAddress;
     private String ipAddress;
     private String apiKey;
+    private String productId;
     private String ownerId;
     private String ownerUsername;
     private String parentDeviceId;

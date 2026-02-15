@@ -66,7 +66,10 @@ void setup() {
 void loop() {
     // Handle MQTT
     mqttHandler.loop();
-    
+
+    // Update LED pattern animation
+    ledController.updatePattern();
+
     // Small delay
     delay(10);
 }

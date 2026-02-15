@@ -1,9 +1,13 @@
 package com.amarjahiji.smartAmbient.service;
 
+import com.amarjahiji.smartAmbient.dto.*;
+import com.amarjahiji.smartAmbient.entity.*;
+import com.amarjahiji.smartAmbient.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.Base64;
 import java.util.List;
@@ -40,6 +44,7 @@ public class DeviceServiceImpl implements DeviceService {
                 .deviceType(request.getDeviceType())
                 .macAddress(request.getMacAddress())
                 .ipAddress(request.getIpAddress())
+                .productId(request.getProductId())
                 .firmwareVersion(request.getFirmwareVersion())
                 .capabilities(request.getCapabilities())
                 .apiKey(generateApiKey())
@@ -92,25 +97,25 @@ public class DeviceServiceImpl implements DeviceService {
     
     @Override
     @Transactional
-    public DeviceResponse claimDevice(String deviceId, String userId) {
-        Device device = deviceRepository.findById(deviceId)
-                .orElseThrow(() -> new RuntimeException("Device not found"));
-        
+    public DeviceResponse claimDevice(String productId, String userId) {
+        Device device = deviceRepository.findByProductId(productId)
+                .orElseThrow(() -> new RuntimeException("Product not found"));
+
         if (device.getOwner() != null) {
             throw new RuntimeException("Device already has an owner");
         }
-        
+
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
-        
+
         device.setOwner(user);
-        
-        List<Device> childDevices = deviceRepository.findByParentDeviceId(deviceId);
+
+        List<Device> childDevices = deviceRepository.findByParentDeviceId(device.getId());
         for (Device child : childDevices) {
             child.setOwner(user);
             deviceRepository.save(child);
         }
-        
+
         Device saved = deviceRepository.save(device);
         return mapToResponse(saved);
     }
@@ -226,6 +231,7 @@ public class DeviceServiceImpl implements DeviceService {
                 .macAddress(device.getMacAddress())
                 .ipAddress(device.getIpAddress())
                 .apiKey(device.getApiKey())
+                .productId(device.getProductId())
                 .ownerId(device.getOwner() != null ? device.getOwner().getId() : null)
                 .ownerUsername(device.getOwner() != null ? device.getOwner().getUsername() : null)
                 .parentDeviceId(device.getParentDevice() != null ? device.getParentDevice().getId() : null)

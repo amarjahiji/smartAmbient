@@ -8,7 +8,9 @@ import org.hibernate.annotations.UpdateTimestamp;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "devices")
+@Table(name = "devices", indexes = {
+        @Index(name = "idx_product_id", columnList = "product_id")
+})
 @NoArgsConstructor
 @AllArgsConstructor
 @Getter
@@ -36,6 +38,9 @@ public class Device {
 
     @Column(name = "api_key", unique = true, length = 64)
     private String apiKey;
+
+    @Column(name = "product_id", unique = true, length = 100)
+    private String productId;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "owner_id")

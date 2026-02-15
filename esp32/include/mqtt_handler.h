@@ -27,9 +27,13 @@ private:
     LedController& leds;
     unsigned long lastReconnectAttempt;
     unsigned long lastHeartbeat;
-    
+    bool registrationSent;
+
     void reconnect();
     void handleMessage(char* topic, byte* payload, unsigned int length);
+    void sendRegistration();
+    bool isRegistered();
+    void markAsRegistered();
     static MqttHandler* instance;
     static void staticCallback(char* topic, byte* payload, unsigned int length);
 };

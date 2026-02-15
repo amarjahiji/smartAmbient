@@ -24,10 +24,13 @@ public class DeviceRegistrationRequest {
     private DeviceType deviceType;
     
     @NotBlank(message = "MAC address is required")
-    @Pattern(regexp = "^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$", 
+    @Pattern(regexp = "^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$",
              message = "Invalid MAC address format")
     private String macAddress;
-    
+
+    @Size(max = 100)
+    private String productId;
+
     @Size(max = 45)
     private String ipAddress;
     

@@ -6,6 +6,7 @@ Controls 3 individual LEDs (Red, Yellow, Green) via ESP32
 import json
 import logging
 import os
+import re
 import socket
 import threading
 import time
@@ -61,6 +62,7 @@ MQTT_BROKER = config.get("mqtt", {}).get("broker", "localhost")
 MQTT_PORT = config.get("mqtt", {}).get("port", 1883)
 MQTT_TOPIC_COMMAND = config.get("mqtt", {}).get("topic_command", "smartambient/led/command")
 MQTT_TOPIC_STATUS = config.get("mqtt", {}).get("topic_status", "smartambient/led/status")
+MQTT_TOPIC_REGISTER = config.get("mqtt", {}).get("topic_register", "smartambient/device/register")
 
 
 def get_mac_address():
@@ -97,12 +99,14 @@ def register_with_backend():
     mac = get_mac_address()
     ip = get_ip_address()
     device_name = config.get("device_name", "SmartAmbient-Pi-Hub")
+    product_id = config.get("product_id", "SMART-AMBIENT-HUB-001")
 
     payload = {
         "deviceName": device_name,
         "deviceType": "RASPBERRY_PI",
         "macAddress": mac,
         "ipAddress": ip,
+        "productId": product_id,
         "firmwareVersion": "1.0.0",
         "capabilities": "mqtt_broker,led_hub,flask_api"
     }
@@ -119,6 +123,7 @@ def register_with_backend():
         data = resp.json()
 
         config["device_api_key"] = data.get("apiKey", "")
+        config["device_id"] = data.get("id", "")
         save_config()
         logger.info(f"Registered successfully. Device ID: {data.get('id')}")
         return True
@@ -127,6 +132,187 @@ def register_with_backend():
         return False
     except Exception as e:
         logger.error(f"Registration failed: {e}")
+        return False
+
+
+def log_command_to_backend(command_type, payload_data, success):
+    """Log a command execution to the backend for audit trail"""
+    device_id = config.get("device_id")
+    api_key = config.get("device_api_key")
+
+    if not device_id or not api_key:
+        logger.debug("Skipping command log - device not fully registered")
+        return
+
+    try:
+        log_payload = {
+            "deviceId": device_id,
+            "commandType": command_type,
+            "payload": json.dumps(payload_data),
+            "status": "COMPLETED" if success else "FAILED",
+            "response": json.dumps(led_state) if success else None
+        }
+
+        response = requests.post(
+            f"{CLOUD_API_URL}/api/devices/commands/log",
+            json=log_payload,
+            headers={"X-Device-Api-Key": api_key},
+            timeout=3
+        )
+        response.raise_for_status()
+        logger.debug(f"Command logged: {command_type}")
+
+    except requests.exceptions.Timeout:
+        logger.warning("Command logging timeout - skipped")
+    except requests.exceptions.ConnectionError:
+        logger.warning("Command logging failed - backend offline")
+    except Exception as e:
+        logger.error(f"Command logging error: {e}")
+
+
+def register_child_device(device_data):
+    """Register a child device (ESP32) with the cloud backend"""
+    try:
+        mac_address = device_data.get("macAddress")
+
+        # Check if already registered in this session
+        if mac_address in registered_devices:
+            logger.info(f"Device {mac_address} already registered in this session, skipping")
+            return True
+
+        api_key = config.get("device_api_key")
+        if not api_key:
+            logger.error("Cannot register child device - Pi not registered (no API key)")
+            return False
+
+        payload = {
+            "deviceName": device_data.get("deviceName", "Unknown-ESP32"),
+            "deviceType": device_data.get("deviceType", "ESP32"),
+            "macAddress": mac_address,
+            "ipAddress": device_data.get("ipAddress"),
+            "firmwareVersion": device_data.get("firmwareVersion", "unknown"),
+            "capabilities": device_data.get("capabilities", "")
+        }
+
+        logger.info(f"Registering child device {mac_address} with backend...")
+        logger.debug(f"Registration payload: {payload}")
+
+        response = requests.post(
+            f"{CLOUD_API_URL}/api/devices/register/child",
+            json=payload,
+            headers={"X-Device-Api-Key": api_key},
+            timeout=10
+        )
+        response.raise_for_status()
+
+        result = response.json()
+        logger.info(f"Child device registered successfully: {result.get('deviceName')} (ID: {result.get('id')})")
+
+        # Mark as registered
+        registered_devices.add(mac_address)
+        return True
+
+    except requests.exceptions.ConnectionError:
+        logger.warning("Could not reach backend for child registration - backend offline")
+        return False
+    except requests.exceptions.Timeout:
+        logger.warning("Child device registration timed out")
+        return False
+    except requests.exceptions.HTTPError as e:
+        logger.error(f"Child device registration failed with HTTP error: {e.response.status_code} - {e.response.text}")
+        return False
+    except Exception as e:
+        logger.error(f"Child device registration error: {e}")
+        return False
+
+
+# Genre mapping for song classification
+GENRE_MAP = {
+    1: "Rock",
+    2: "Pop",
+    3: "Jazz",
+    4: "Classical",
+    5: "Electronic",
+    6: "Hip-Hop"
+}
+
+
+def classify_song_genre(song):
+    """Classify a song into one of 6 genres using Ollama (Llama 3.2:1b)"""
+    try:
+        # Derive Ollama host from backend URL (same machine, port 11434)
+        backend_url = CLOUD_API_URL
+        ollama_host = backend_url.split("//")[1].split(":")[0]
+        ollama_url = f"http://{ollama_host}:11434/api/generate"
+
+        prompt = (
+            "You are a music classifier. Reply with only the index number.\n1: Rock\n2: Pop\n3: Jazz\n4: Classical\n5: Electronic\n6: Hip-Hop\n\nSong: {song}\nIndex:"
+        )
+        prompt = (
+            f"Classify the following song into exactly one of these genres:\n"
+            f"1 - Rock\n"
+            f"2 - Pop\n"
+            f"3 - Jazz\n"
+            f"4 - Classical\n"
+            f"5 - Electronic\n"
+            f"6 - Hip-Hop\n\n"
+            f"Song: {song}\n\n"
+            f"Respond with ONLY the number (1-6), nothing else."
+        )
+
+        payload = {
+            "model": "llama3.2:1b",
+            "prompt": prompt,
+            "stream": False,
+            "options": {
+                "temperature": 0.3,
+                "num_predict": 10
+            }
+        }
+
+        logger.info(f"Classifying song: {song}")
+        response = requests.post(ollama_url, json=payload, timeout=30)
+        response.raise_for_status()
+
+        result = response.json()
+        response_text = result.get("response", "").strip()
+        logger.info(f"Ollama response: {response_text}")
+
+        # Extract a number 1-6 from the response
+        match = re.search(r'[1-6]', response_text)
+        if match:
+            genre_id = int(match.group())
+            logger.info(f"Classified as genre {genre_id}: {GENRE_MAP[genre_id]}")
+            return genre_id
+
+        # Fallback to Pop if parsing fails
+        logger.warning(f"Could not parse genre from response: {response_text}, defaulting to Pop (2)")
+        return 2
+
+    except requests.exceptions.ConnectionError:
+        logger.error("Could not reach Ollama - is it running?")
+        raise
+    except requests.exceptions.Timeout:
+        logger.error("Ollama request timed out")
+        raise
+    except Exception as e:
+        logger.error(f"Genre classification error: {e}")
+        raise
+
+
+def send_pattern_command(pattern_id):
+    """Send a pattern command to ESP32 via MQTT"""
+    if not mqtt_connected:
+        logger.error("MQTT not connected")
+        return False
+
+    try:
+        payload = json.dumps({"command": "pattern", "patternId": pattern_id})
+        mqtt_client.publish(MQTT_TOPIC_COMMAND, payload)
+        logger.info(f"Sent pattern command: {payload}")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to send pattern command: {e}")
         return False
 
 
@@ -143,6 +329,9 @@ esp32_status = {
     "last_seen": None
 }
 
+# Track registration attempts to prevent duplicates
+registered_devices = set()  # Store MAC addresses of registered devices
+
 # MQTT client
 mqtt_client = None
 mqtt_connected = False
@@ -154,9 +343,10 @@ def on_mqtt_connect(client, userdata, flags, rc, properties=None):
     if rc == 0:
         logger.info("Connected to MQTT broker")
         mqtt_connected = True
-        # Subscribe to status topic
+        # Subscribe to status and registration topics
         client.subscribe(MQTT_TOPIC_STATUS)
-        logger.info(f"Subscribed to {MQTT_TOPIC_STATUS}")
+        client.subscribe(MQTT_TOPIC_REGISTER)
+        logger.info(f"Subscribed to {MQTT_TOPIC_STATUS} and {MQTT_TOPIC_REGISTER}")
     else:
         logger.error(f"Failed to connect to MQTT broker, return code {rc}")
         mqtt_connected = False
@@ -172,22 +362,33 @@ def on_mqtt_disconnect(client, userdata, rc, properties=None):
 def on_mqtt_message(client, userdata, msg):
     """Callback when message received from ESP32"""
     global esp32_status, led_state
+
     try:
         payload = json.loads(msg.payload.decode())
-        logger.info(f"Received from ESP32: {payload}")
-        
-        # Update ESP32 status
-        esp32_status["connected"] = True
-        esp32_status["last_seen"] = time.strftime("%Y-%m-%d %H:%M:%S")
-        
-        # Update LED state if included
-        if "red" in payload:
-            led_state["red"] = bool(payload["red"])
-        if "yellow" in payload:
-            led_state["yellow"] = bool(payload["yellow"])
-        if "green" in payload:
-            led_state["green"] = bool(payload["green"])
-            
+        topic = msg.topic
+
+        logger.info(f"Received [{topic}]: {payload}")
+
+        # Handle registration messages
+        if topic == MQTT_TOPIC_REGISTER:
+            logger.info("Processing device registration request")
+            register_child_device(payload)
+            return
+
+        # Handle status messages (existing logic)
+        if topic == MQTT_TOPIC_STATUS:
+            # Update ESP32 status
+            esp32_status["connected"] = True
+            esp32_status["last_seen"] = time.strftime("%Y-%m-%d %H:%M:%S")
+
+            # Update LED state if included
+            if "red" in payload:
+                led_state["red"] = bool(payload["red"])
+            if "yellow" in payload:
+                led_state["yellow"] = bool(payload["yellow"])
+            if "green" in payload:
+                led_state["green"] = bool(payload["green"])
+
     except json.JSONDecodeError:
         logger.error(f"Invalid JSON received: {msg.payload}")
     except Exception as e:
@@ -290,7 +491,9 @@ def get_led_state():
 @app.route('/led/on', methods=['POST'])
 def turn_all_on():
     """Turn all LEDs on"""
-    if send_command("on"):
+    success = send_command("on")
+    log_command_to_backend("LED_TURN_ON", {"command": "on"}, success)
+    if success:
         return jsonify({
             "success": True,
             "message": "All LEDs turned on",
@@ -305,7 +508,9 @@ def turn_all_on():
 @app.route('/led/off', methods=['POST'])
 def turn_all_off():
     """Turn all LEDs off"""
-    if send_command("off"):
+    success = send_command("off")
+    log_command_to_backend("LED_TURN_OFF", {"command": "off"}, success)
+    if success:
         return jsonify({
             "success": True,
             "message": "All LEDs turned off",
@@ -351,8 +556,10 @@ def set_leds():
                     "success": False,
                     "message": f"'{name}' must be a boolean (true/false)"
                 }), 400
-        
-        if send_command("set", red=red, yellow=yellow, green=green):
+
+        success = send_command("set", red=red, yellow=yellow, green=green)
+        log_command_to_backend("LED_SET_COLOR", data, success)
+        if success:
             return jsonify({
                 "success": True,
                 "message": "LED state updated",
@@ -362,9 +569,10 @@ def set_leds():
             "success": False,
             "message": "Failed to send command"
         }), 500
-        
+
     except Exception as e:
         logger.error(f"Error in set_leds: {e}")
+        log_command_to_backend("LED_SET_COLOR", data if 'data' in locals() else {}, False)
         return jsonify({
             "success": False,
             "message": str(e)
@@ -384,9 +592,11 @@ def toggle_led(led_name):
     
     # Toggle the specified LED
     new_state = not led_state[led_name]
-    
+
     kwargs = {led_name: new_state}
-    if send_command("set", **kwargs):
+    success = send_command("set", **kwargs)
+    log_command_to_backend("LED_SET_COLOR", {"led": led_name, "new_state": new_state}, success)
+    if success:
         return jsonify({
             "success": True,
             "message": f"{led_name.capitalize()} LED toggled to {'on' if new_state else 'off'}",
@@ -396,6 +606,65 @@ def toggle_led(led_name):
         "success": False,
         "message": "Failed to send command"
     }), 500
+
+
+@app.route('/song', methods=['POST'])
+def classify_song():
+    """
+    Classify a song's genre and play matching LED pattern
+
+    Request body:
+    {
+        "song": "Bohemian Rhapsody by Queen"
+    }
+    """
+    try:
+        data = request.get_json()
+        if not data or "song" not in data:
+            return jsonify({
+                "success": False,
+                "message": "Missing 'song' field in request body"
+            }), 400
+
+        song = data["song"]
+
+        # Classify genre via Ollama
+        genre_id = classify_song_genre(song)
+        genre_name = GENRE_MAP.get(genre_id, "Unknown")
+
+        # Send pattern command to ESP32
+        success = send_pattern_command(genre_id)
+        log_command_to_backend("SONG_PATTERN", {"song": song, "genre": genre_name, "patternId": genre_id}, success)
+
+        if success:
+            return jsonify({
+                "success": True,
+                "song": song,
+                "genre": genre_name,
+                "genreId": genre_id,
+                "message": f"Playing {genre_name} pattern for '{song}'"
+            })
+        return jsonify({
+            "success": False,
+            "message": "Failed to send pattern command to ESP32"
+        }), 500
+
+    except requests.exceptions.ConnectionError:
+        return jsonify({
+            "success": False,
+            "message": "Could not reach Ollama - is it running?"
+        }), 503
+    except requests.exceptions.Timeout:
+        return jsonify({
+            "success": False,
+            "message": "Ollama request timed out"
+        }), 504
+    except Exception as e:
+        logger.error(f"Error in /song endpoint: {e}")
+        return jsonify({
+            "success": False,
+            "message": str(e)
+        }), 500
 
 
 # ============== Main ==============
