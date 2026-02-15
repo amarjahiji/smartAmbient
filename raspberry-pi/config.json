@@ -3,7 +3,7 @@
     "product_id": "SMART-AMBIENT-HUB-001",
     "device_id": null,
     "cloud_api_url": "http://34.159.129.225:8080",
-    "device_api_key": "Yuzlm6YBLBxgwQXqoIyz-Mi74kMXHQ4bSYsAAnqYc50",
+    "device_api_key": null,
     "mqtt": {
         "broker": "localhost",
         "port": 1883,
