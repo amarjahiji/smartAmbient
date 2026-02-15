@@ -5,6 +5,7 @@
 
 #include "mqtt_handler.h"
 #include <Preferences.h>
+#include <WiFi.h>
 
 // Static instance for callback
 MqttHandler* MqttHandler::instance = nullptr;
