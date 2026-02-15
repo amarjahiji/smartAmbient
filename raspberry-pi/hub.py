@@ -246,7 +246,7 @@ def classify_song_genre(song):
         ollama_url = f"http://{ollama_host}:11434/api/generate"
 
         prompt = (
-            "You are a music classifier. Reply with only the index number.\n1: Rock\n2: Pop\n3: Jazz\n4: Classical\n5: Electronic\n6: Hip-Hop\n\nSong: {song}\nIndex:"
+            f"You are a music classifier. Reply with only the index number.\n1: Rock\n2: Pop\n3: Jazz\n4: Classical\n5: Electronic\n6: Hip-Hop\n\nSong: {song}\nIndex:"
         )
         
 
