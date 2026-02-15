@@ -317,11 +317,11 @@ audio_active = False
 audio_stream = None
 audio_device_info = None
 
-# Adaptive threshold state (exponential moving average)
+# Adaptive threshold state
 _band_avg = [0.0, 0.0, 0.0]  # bass, mid, treble running averages
-_ema_alpha = 0.05  # smoothing factor (lower = slower baseline, more reactive LEDs)
-_threshold_multiplier = 1.2  # LED on when energy > avg * multiplier
-_min_energy = 0.001  # ignore silence / noise floor
+_band_min = [float('inf'), float('inf'), float('inf')]  # tracked minimums
+_band_max = [0.0, 0.0, 0.0]  # tracked maximums
+_ema_alpha = 0.05  # smoothing factor for baseline
 _last_mqtt_send = 0.0
 _last_led_state = [False, False, False]  # red, yellow, green
 _callback_count = 0
@@ -329,7 +329,7 @@ _callback_count = 0
 
 def audio_callback(indata, frames, time_info, status):
     """Process audio chunk and update LEDs in real time"""
-    global _band_avg, _last_mqtt_send, _last_led_state, _callback_count
+    global _band_avg, _band_min, _band_max, _last_mqtt_send, _last_led_state, _callback_count
     import numpy as np
 
     if status:
@@ -356,22 +356,35 @@ def audio_callback(indata, frames, time_info, status):
 
     energies = [bass_energy, mid_energy, treble_energy]
 
-    # Log every ~2 seconds (every 43 chunks at 21 chunks/sec) for debugging
+    # Log every ~2 seconds for debugging
     if _callback_count % 43 == 1:
-        logger.info(f"Audio energy - Bass: {bass_energy:.4f}, Mid: {mid_energy:.4f}, Treble: {treble_energy:.4f} | Avg: [{_band_avg[0]:.4f}, {_band_avg[1]:.4f}, {_band_avg[2]:.4f}]")
+        logger.info(
+            f"Audio - Bass: {bass_energy:.2f}, Mid: {mid_energy:.2f}, Treble: {treble_energy:.4f} | "
+            f"Range: [{_band_min[0]:.2f}-{_band_max[0]:.2f}, {_band_min[1]:.2f}-{_band_max[1]:.2f}] | "
+            f"LEDs: R={_last_led_state[0]} Y={_last_led_state[1]} G={_last_led_state[2]}"
+        )
 
-    # Update adaptive thresholds with exponential moving average
+    # Update baseline average and track min/max range
     for i in range(3):
         if _band_avg[i] == 0.0:
-            _band_avg[i] = energies[i]  # seed with first real value
+            _band_avg[i] = energies[i]
         else:
             _band_avg[i] = _ema_alpha * energies[i] + (1 - _ema_alpha) * _band_avg[i]
+        # Track min/max, slowly decay toward average to stay adaptive
+        _band_min[i] = min(_band_min[i], energies[i])
+        _band_max[i] = max(_band_max[i], energies[i])
+        _band_min[i] = _band_min[i] * 0.999 + _band_avg[i] * 0.001
+        _band_max[i] = _band_max[i] * 0.999 + _band_avg[i] * 0.001
 
-    # Determine LED states: energy must exceed both noise floor and adaptive threshold
-    new_state = [
-        energies[i] > _min_energy and energies[i] > _band_avg[i] * _threshold_multiplier
-        for i in range(3)
-    ]
+    # LED turns on when energy is in the upper 40% of observed range
+    new_state = [False, False, False]
+    for i in range(3):
+        band_range = _band_max[i] - _band_min[i]
+        if band_range > 0.01:
+            position = (energies[i] - _band_min[i]) / band_range
+            new_state[i] = position > 0.6
+        else:
+            new_state[i] = energies[i] > _band_avg[i] * 1.1
 
     # Rate-limit MQTT: only send when state changes or every 100ms
     now = time.time()
@@ -397,11 +410,13 @@ def audio_callback(indata, frames, time_info, status):
 def start_audio_listening():
     """Start capturing audio from USB mic and processing it"""
     global audio_active, audio_stream, audio_device_info
-    global _band_avg, _last_mqtt_send, _last_led_state, _callback_count
+    global _band_avg, _band_min, _band_max, _last_mqtt_send, _last_led_state, _callback_count
     import sounddevice as sd
 
     # Reset adaptive thresholds
     _band_avg = [0.0, 0.0, 0.0]
+    _band_min = [float('inf'), float('inf'), float('inf')]
+    _band_max = [0.0, 0.0, 0.0]
     _last_mqtt_send = 0.0
     _last_led_state = [False, False, False]
     _callback_count = 0
