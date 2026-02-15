@@ -8,6 +8,24 @@ echo "======================================"
 # Get the directory where this script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Install system dependencies
+echo "Installing system dependencies..."
+sudo apt-get update -qq
+sudo apt-get install -y -qq libportaudio2 > /dev/null 2>&1
+echo "System dependencies installed."
+
+# Set up Python virtual environment and install requirements
+echo "Setting up Python environment..."
+if [ ! -d "$SCRIPT_DIR/venv" ]; then
+    echo "Creating virtual environment..."
+    python3 -m venv "$SCRIPT_DIR/venv"
+fi
+
+echo "Installing Python dependencies..."
+"$SCRIPT_DIR/venv/bin/pip" install --upgrade pip -q
+"$SCRIPT_DIR/venv/bin/pip" install -r "$SCRIPT_DIR/requirements.txt" -q
+echo "Python dependencies installed."
+
 # Create systemd service file
 echo "Creating systemd service..."
 sudo tee /etc/systemd/system/smartambient.service > /dev/null << EOF
