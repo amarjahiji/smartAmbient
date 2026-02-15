@@ -13,8 +13,10 @@ import time
 import uuid
 from pathlib import Path
 
+import numpy as np
 import paho.mqtt.client as mqtt
 import requests
+import sounddevice as sd
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 
@@ -304,6 +306,172 @@ def send_pattern_command(pattern_id):
     except Exception as e:
         logger.error(f"Failed to send pattern command: {e}")
         return False
+
+
+# ============== Audio Processing ==============
+
+AUDIO_SAMPLE_RATE = 44100
+AUDIO_CHUNK_SIZE = 2048
+AUDIO_CHANNELS = 1
+
+# Audio state
+audio_active = False
+audio_stream = None
+audio_device_info = None
+
+# Adaptive threshold state (exponential moving average)
+_band_avg = [0.0, 0.0, 0.0]  # bass, mid, treble running averages
+_ema_alpha = 0.3  # smoothing factor (higher = adapts faster)
+_threshold_multiplier = 1.5  # LED on when energy > avg * multiplier
+_last_mqtt_send = 0.0
+_last_led_state = [False, False, False]  # red, yellow, green
+
+
+def audio_callback(indata, frames, time_info, status):
+    """Process audio chunk and update LEDs in real time"""
+    global _band_avg, _last_mqtt_send, _last_led_state
+
+    if status:
+        logger.debug(f"Audio status: {status}")
+
+    # Get mono audio data
+    audio = indata[:, 0]
+
+    # Apply window function to reduce spectral leakage
+    windowed = audio * np.hanning(len(audio))
+
+    # Compute FFT
+    fft_data = np.abs(np.fft.rfft(windowed))
+
+    # Frequency resolution: sample_rate / chunk_size = ~21.5 Hz per bin
+    # Bass (20-300 Hz): bins 1-14
+    # Mid (300-2000 Hz): bins 14-93
+    # Treble (2000-8000 Hz): bins 93-372
+    bass_energy = np.mean(fft_data[1:14])
+    mid_energy = np.mean(fft_data[14:93])
+    treble_energy = np.mean(fft_data[93:372])
+
+    energies = [bass_energy, mid_energy, treble_energy]
+
+    # Update adaptive thresholds with exponential moving average
+    for i in range(3):
+        _band_avg[i] = _ema_alpha * energies[i] + (1 - _ema_alpha) * _band_avg[i]
+
+    # Determine LED states based on adaptive threshold
+    new_state = [
+        energies[i] > _band_avg[i] * _threshold_multiplier
+        for i in range(3)
+    ]
+
+    # Rate-limit MQTT: only send when state changes or every 100ms
+    now = time.time()
+    state_changed = new_state != _last_led_state
+    time_elapsed = (now - _last_mqtt_send) >= 0.1
+
+    if state_changed or time_elapsed:
+        if mqtt_connected and mqtt_client:
+            try:
+                payload = json.dumps({
+                    "command": "set",
+                    "red": new_state[0],
+                    "yellow": new_state[1],
+                    "green": new_state[2]
+                })
+                mqtt_client.publish(MQTT_TOPIC_COMMAND, payload)
+            except Exception:
+                pass
+        _last_led_state = new_state
+        _last_mqtt_send = now
+
+
+def start_audio_listening():
+    """Start capturing audio from USB mic and processing it"""
+    global audio_active, audio_stream, audio_device_info
+    global _band_avg, _last_mqtt_send, _last_led_state
+
+    # Reset adaptive thresholds
+    _band_avg = [0.0, 0.0, 0.0]
+    _last_mqtt_send = 0.0
+    _last_led_state = [False, False, False]
+
+    # Find an input device
+    try:
+        devices = sd.query_devices()
+        input_device = None
+        input_device_idx = None
+
+        # Look for a USB audio input device
+        for idx, dev in enumerate(devices):
+            if dev['max_input_channels'] > 0:
+                name = dev['name'].lower()
+                if 'usb' in name or 'headset' in name or 'microphone' in name or 'mic' in name:
+                    input_device = dev
+                    input_device_idx = idx
+                    break
+
+        # Fallback to default input device
+        if input_device is None:
+            default_idx = sd.default.device[0]
+            if default_idx is not None and default_idx >= 0:
+                input_device = sd.query_devices(default_idx)
+                input_device_idx = default_idx
+
+        if input_device is None:
+            raise RuntimeError("No audio input device found")
+
+        audio_device_info = {
+            "name": input_device['name'],
+            "index": input_device_idx,
+            "sample_rate": AUDIO_SAMPLE_RATE,
+            "channels": AUDIO_CHANNELS
+        }
+
+        logger.info(f"Using audio device: {input_device['name']} (index {input_device_idx})")
+
+        audio_stream = sd.InputStream(
+            device=input_device_idx,
+            channels=AUDIO_CHANNELS,
+            samplerate=AUDIO_SAMPLE_RATE,
+            blocksize=AUDIO_CHUNK_SIZE,
+            callback=audio_callback
+        )
+        audio_stream.start()
+        audio_active = True
+
+        logger.info("Audio listening started")
+        return audio_device_info
+
+    except Exception as e:
+        logger.error(f"Failed to start audio: {e}")
+        audio_active = False
+        audio_stream = None
+        raise
+
+
+def stop_audio_listening():
+    """Stop audio capture and turn LEDs off"""
+    global audio_active, audio_stream, audio_device_info
+
+    if audio_stream is not None:
+        try:
+            audio_stream.stop()
+            audio_stream.close()
+        except Exception as e:
+            logger.error(f"Error stopping audio stream: {e}")
+        audio_stream = None
+
+    audio_active = False
+    audio_device_info = None
+
+    # Turn LEDs off
+    if mqtt_connected and mqtt_client:
+        try:
+            payload = json.dumps({"command": "off", "red": False, "yellow": False, "green": False})
+            mqtt_client.publish(MQTT_TOPIC_COMMAND, payload)
+        except Exception:
+            pass
+
+    logger.info("Audio listening stopped")
 
 
 # LED state - simple booleans for each LED
@@ -655,6 +823,67 @@ def classify_song():
             "success": False,
             "message": str(e)
         }), 500
+
+
+@app.route('/music/start', methods=['POST'])
+def music_start():
+    """Start real-time audio-reactive LED mode"""
+    global audio_active
+
+    if audio_active:
+        return jsonify({
+            "success": False,
+            "message": "Audio listening is already active",
+            "device": audio_device_info
+        }), 409
+
+    try:
+        # Stop any running pattern first
+        if mqtt_connected and mqtt_client:
+            mqtt_client.publish(MQTT_TOPIC_COMMAND, json.dumps({"command": "off", "red": False, "yellow": False, "green": False}))
+
+        device_info = start_audio_listening()
+        log_command_to_backend("MUSIC_START", {"device": device_info}, True)
+
+        return jsonify({
+            "success": True,
+            "message": "Audio-reactive LED mode started",
+            "device": device_info
+        })
+
+    except Exception as e:
+        logger.error(f"Error starting music mode: {e}")
+        return jsonify({
+            "success": False,
+            "message": f"Failed to start audio: {str(e)}"
+        }), 500
+
+
+@app.route('/music/stop', methods=['POST'])
+def music_stop():
+    """Stop real-time audio-reactive LED mode"""
+    if not audio_active:
+        return jsonify({
+            "success": False,
+            "message": "Audio listening is not active"
+        }), 400
+
+    stop_audio_listening()
+    log_command_to_backend("MUSIC_STOP", {}, True)
+
+    return jsonify({
+        "success": True,
+        "message": "Audio-reactive LED mode stopped"
+    })
+
+
+@app.route('/music/status', methods=['GET'])
+def music_status():
+    """Get audio listening status"""
+    return jsonify({
+        "active": audio_active,
+        "device": audio_device_info
+    })
 
 
 # ============== Main ==============
