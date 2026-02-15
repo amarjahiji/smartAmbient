@@ -185,11 +185,6 @@ def register_child_device(device_data):
     try:
         mac_address = device_data.get("macAddress")
 
-        # Check if already registered in this session
-        if mac_address in registered_devices:
-            logger.info(f"Device {mac_address} already registered in this session, skipping")
-            return True
-
         api_key = config.get("device_api_key")
         if not api_key:
             logger.error("Cannot register child device - Pi not registered (no API key)")
@@ -205,7 +200,6 @@ def register_child_device(device_data):
         }
 
         logger.info(f"Registering child device {mac_address} with backend...")
-        logger.debug(f"Registration payload: {payload}")
 
         response = requests.post(
             f"{CLOUD_API_URL}/api/devices/register/child",
@@ -217,9 +211,6 @@ def register_child_device(device_data):
 
         result = response.json()
         logger.info(f"Child device registered successfully: {result.get('deviceName')} (ID: {result.get('id')})")
-
-        # Mark as registered
-        registered_devices.add(mac_address)
         return True
 
     except requests.exceptions.ConnectionError:
@@ -525,9 +516,6 @@ esp32_status = {
     "connected": False,
     "last_seen": None
 }
-
-# Track registration attempts to prevent duplicates
-registered_devices = set()  # Store MAC addresses of registered devices
 
 # MQTT client
 mqtt_client = None

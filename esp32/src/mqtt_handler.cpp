@@ -4,14 +4,13 @@
  */
 
 #include "mqtt_handler.h"
-#include <Preferences.h>
 #include <WiFi.h>
 
 // Static instance for callback
 MqttHandler* MqttHandler::instance = nullptr;
 
 MqttHandler::MqttHandler(WiFiClient& wifiClient, LedController& ledController)
-    : mqttClient(wifiClient), leds(ledController), lastReconnectAttempt(0), lastHeartbeat(0), registrationSent(false) {
+    : mqttClient(wifiClient), leds(ledController), lastReconnectAttempt(0), lastHeartbeat(0) {
     instance = this;
 }
 
@@ -142,28 +141,8 @@ void MqttHandler::sendStatus() {
     Serial.printf("Status sent: %s\n", buffer);
 }
 
-bool MqttHandler::isRegistered() {
-    Preferences preferences;
-    preferences.begin("smartambient", true);  // read-only
-    bool registered = preferences.getBool("is_registered", false);
-    preferences.end();
-    return registered;
-}
-
-void MqttHandler::markAsRegistered() {
-    Preferences preferences;
-    preferences.begin("smartambient", false);  // read-write
-    preferences.putBool("is_registered", true);
-    preferences.end();
-    Serial.println("Device marked as registered in NVS");
-}
 
 void MqttHandler::sendRegistration() {
-    if (registrationSent || isRegistered()) {
-        Serial.println("Registration already sent or device registered, skipping");
-        return;
-    }
-
     JsonDocument doc;
     doc["deviceName"] = DEVICE_NAME;
     doc["deviceType"] = DEVICE_TYPE;
@@ -178,9 +157,6 @@ void MqttHandler::sendRegistration() {
     bool published = mqttClient.publish(MQTT_TOPIC_REGISTER, buffer);
     if (published) {
         Serial.printf("Registration sent: %s\n", buffer);
-        registrationSent = true;
-        // Mark as registered immediately (fire-and-forget approach)
-        markAsRegistered();
     } else {
         Serial.println("Failed to publish registration message");
     }

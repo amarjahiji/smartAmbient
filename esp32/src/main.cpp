@@ -54,7 +54,7 @@ void setup() {
     
     // Connect to WiFi
     setupWiFi();
-    
+
     // Initialize MQTT
     mqttHandler.begin();
     
