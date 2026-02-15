@@ -381,10 +381,10 @@ def audio_callback(indata, frames, time_info, status):
     for i in range(3):
         band_range = _band_max[i] - _band_min[i]
         if band_range > 0.01:
-            position = (energies[i] - _band_min[i]) / band_range
+            position = float(energies[i] - _band_min[i]) / float(band_range)
             new_state[i] = position > 0.6
         else:
-            new_state[i] = energies[i] > _band_avg[i] * 1.1
+            new_state[i] = float(energies[i]) > float(_band_avg[i]) * 1.1
 
     # Rate-limit MQTT: only send when state changes or every 100ms
     now = time.time()
@@ -396,13 +396,13 @@ def audio_callback(indata, frames, time_info, status):
             try:
                 payload = json.dumps({
                     "command": "set",
-                    "red": new_state[0],
-                    "yellow": new_state[1],
-                    "green": new_state[2]
+                    "red": bool(new_state[0]),
+                    "yellow": bool(new_state[1]),
+                    "green": bool(new_state[2])
                 })
                 mqtt_client.publish(MQTT_TOPIC_COMMAND, payload)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error(f"Audio MQTT send error: {e}")
         _last_led_state = new_state
         _last_mqtt_send = now
 
