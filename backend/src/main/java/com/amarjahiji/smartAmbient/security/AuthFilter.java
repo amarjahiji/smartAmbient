@@ -27,7 +27,8 @@ public class AuthFilter implements Filter {
     private static final String[] DEVICE_API_KEY_PATHS = {
             "/api/devices/register",
             "/api/devices/register/child",
-            "/api/devices/commands/log"
+            "/api/devices/commands/log",
+            "/api/devices/proxy/ollama"
     };
     
     // Paths that require device API key with device ID in path

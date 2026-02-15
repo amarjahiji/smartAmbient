@@ -12,7 +12,7 @@ sudo apt update && sudo apt upgrade -y
 
 # ---- Install Dependencies ----
 echo "[2/7] Installing required packages..."
-sudo apt install -y git curl wget unzip lsb-release gnupg
+sudo apt install -y git curl wget unzip zip lsb-release gnupg
 
 # ---- Install MySQL 8 ----
 echo "[3/7] Installing MySQL..."
@@ -20,12 +20,16 @@ sudo apt install -y mysql-server
 sudo systemctl start mysql
 sudo systemctl enable mysql
 
-# Set root password and create database
-sudo mysql <<MYSQL_SCRIPT
+# Set root password and create database (handles both fresh and re-run)
+if sudo mysql -e "SELECT 1" 2>/dev/null; then
+    sudo mysql <<MYSQL_SCRIPT
 ALTER USER 'root'@'localhost' IDENTIFIED WITH mysql_native_password BY 'flacko1237';
 FLUSH PRIVILEGES;
 CREATE DATABASE IF NOT EXISTS smart_ambient;
 MYSQL_SCRIPT
+else
+    sudo mysql -u root -pflacko1237 -e "CREATE DATABASE IF NOT EXISTS smart_ambient;"
+fi
 
 echo "MySQL configured: root/flacko1237, database: smart_ambient"
 
@@ -73,6 +77,7 @@ echo "Backend built: target/smartAmbient-0.0.1-SNAPSHOT.jar"
 echo "[7/7] Setting up systemd service..."
 
 JAVA_PATH=$(which java)
+JAVA_HOME_DIR=$(dirname $(dirname "$JAVA_PATH"))
 
 sudo tee /etc/systemd/system/smartambient.service > /dev/null <<EOF
 [Unit]
@@ -83,6 +88,8 @@ Wants=mysql.service
 [Service]
 Type=simple
 User=$USER
+Environment="JAVA_HOME=$JAVA_HOME_DIR"
+Environment="PATH=$JAVA_HOME_DIR/bin:/usr/local/bin:/usr/bin:/bin"
 WorkingDirectory=$HOME/smartAmbient/backend
 ExecStart=$JAVA_PATH -jar $HOME/smartAmbient/backend/target/smartAmbient-0.0.1-SNAPSHOT.jar
 Restart=always

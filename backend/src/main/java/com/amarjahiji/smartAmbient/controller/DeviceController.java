@@ -6,11 +6,12 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
+import org.springframework.http.*;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.client.RestTemplate;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/devices")
@@ -107,5 +108,34 @@ public class DeviceController {
         }
         deviceService.updateDeviceStatus(deviceId, online);
         return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/proxy/ollama")
+    public ResponseEntity<String> proxyOllama(
+            @RequestBody String body,
+            @RequestHeader("X-Device-Api-Key") String apiKey) {
+        if (!deviceService.validateApiKey(apiKey)) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        try {
+            RestTemplate restTemplate = new RestTemplate();
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            HttpEntity<String> entity = new HttpEntity<>(body, headers);
+
+            ResponseEntity<String> ollamaResponse = restTemplate.exchange(
+                    "http://localhost:11434/api/generate",
+                    HttpMethod.POST,
+                    entity,
+                    String.class
+            );
+
+            return ResponseEntity.ok(ollamaResponse.getBody());
+        } catch (Exception e) {
+            log.error("Ollama proxy error: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+                    .body("{\"error\": \"Failed to reach Ollama: " + e.getMessage() + "\"}");
+        }
     }
 }

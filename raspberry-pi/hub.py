@@ -248,17 +248,14 @@ GENRE_MAP = {
 
 
 def classify_song_genre(song):
-    """Classify a song into one of 6 genres using Ollama (Llama 3.2:1b)"""
+    """Classify a song into one of 6 genres using Ollama via backend proxy"""
     try:
-        # Derive Ollama host from backend URL (same machine, port 11434)
-        backend_url = CLOUD_API_URL
-        ollama_host = backend_url.split("//")[1].split(":")[0]
-        ollama_url = f"http://{ollama_host}:11434/api/generate"
+        ollama_url = f"{CLOUD_API_URL}/api/devices/proxy/ollama"
+        api_key = config.get("device_api_key", "")
 
         prompt = (
             f"You are a music classifier. Reply with only the index number.\n1: Rock\n2: Pop\n3: Jazz\n4: Classical\n5: Electronic\n6: Hip-Hop\n\nSong: {song}\nIndex:"
         )
-        
 
         payload = {
             "model": "llama3.2:3b",
@@ -271,7 +268,12 @@ def classify_song_genre(song):
         }
 
         logger.info(f"Classifying song: {song}")
-        response = requests.post(ollama_url, json=payload, timeout=30)
+        response = requests.post(
+            ollama_url,
+            json=payload,
+            headers={"X-Device-Api-Key": api_key},
+            timeout=30
+        )
         response.raise_for_status()
 
         result = response.json()
@@ -290,10 +292,10 @@ def classify_song_genre(song):
         return 2
 
     except requests.exceptions.ConnectionError:
-        logger.error("Could not reach Ollama - is it running?")
+        logger.error("Could not reach backend for Ollama proxy")
         raise
     except requests.exceptions.Timeout:
-        logger.error("Ollama request timed out")
+        logger.error("Ollama proxy request timed out")
         raise
     except Exception as e:
         logger.error(f"Genre classification error: {e}")
