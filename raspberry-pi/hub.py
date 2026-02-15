@@ -328,6 +328,7 @@ _last_led_state = [False, False, False]  # red, yellow, green
 def audio_callback(indata, frames, time_info, status):
     """Process audio chunk and update LEDs in real time"""
     global _band_avg, _last_mqtt_send, _last_led_state
+    import numpy as np
 
     if status:
         logger.debug(f"Audio status: {status}")
@@ -386,6 +387,7 @@ def start_audio_listening():
     """Start capturing audio from USB mic and processing it"""
     global audio_active, audio_stream, audio_device_info
     global _band_avg, _last_mqtt_send, _last_led_state
+    import sounddevice as sd
 
     # Reset adaptive thresholds
     _band_avg = [0.0, 0.0, 0.0]
