@@ -92,8 +92,9 @@ def save_config():
 def register_with_backend():
     """Register this Pi hub with the cloud backend"""
     api_key = config.get("device_api_key", "")
-    if api_key:
-        logger.info("Device already registered (API key found in config)")
+    device_id = config.get("device_id")
+    if api_key and device_id:
+        logger.info("Device already registered (API key and device ID found in config)")
         return True
 
     mac = get_mac_address()
@@ -116,16 +117,23 @@ def register_with_backend():
         resp = requests.post(
             f"{CLOUD_API_URL}/api/devices/register",
             json=payload,
-            headers={"X-Device-Api-Key": "registering"},
+            headers={"X-Device-Api-Key": api_key if api_key else "registering"},
             timeout=10
         )
         resp.raise_for_status()
         data = resp.json()
 
-        config["device_api_key"] = data.get("apiKey", "")
-        config["device_id"] = data.get("id", "")
+        new_api_key = data.get("apiKey")
+        new_device_id = data.get("id")
+
+        if not new_device_id or not new_api_key:
+            logger.error(f"Registration response missing fields - id: {new_device_id}, apiKey: {'present' if new_api_key else 'missing'}")
+            return False
+
+        config["device_api_key"] = new_api_key
+        config["device_id"] = new_device_id
         save_config()
-        logger.info(f"Registered successfully. Device ID: {data.get('id')}")
+        logger.info(f"Registered successfully. Device ID: {new_device_id}")
         return True
     except requests.exceptions.ConnectionError:
         logger.warning("Could not reach backend — will retry on next startup")
@@ -141,7 +149,7 @@ def log_command_to_backend(command_type, payload_data, success):
     api_key = config.get("device_api_key")
 
     if not device_id or not api_key:
-        logger.debug("Skipping command log - device not fully registered")
+        logger.warning(f"Skipping command log ({command_type}) - device_id: {device_id}, api_key: {'present' if api_key else 'missing'}")
         return
 
     try:
@@ -157,15 +165,17 @@ def log_command_to_backend(command_type, payload_data, success):
             f"{CLOUD_API_URL}/api/devices/commands/log",
             json=log_payload,
             headers={"X-Device-Api-Key": api_key},
-            timeout=3
+            timeout=5
         )
         response.raise_for_status()
-        logger.debug(f"Command logged: {command_type}")
+        logger.info(f"Command logged to backend: {command_type}")
 
     except requests.exceptions.Timeout:
         logger.warning("Command logging timeout - skipped")
     except requests.exceptions.ConnectionError:
         logger.warning("Command logging failed - backend offline")
+    except requests.exceptions.HTTPError as e:
+        logger.error(f"Command logging HTTP error: {e.response.status_code} - {e.response.text}")
     except Exception as e:
         logger.error(f"Command logging error: {e}")
 

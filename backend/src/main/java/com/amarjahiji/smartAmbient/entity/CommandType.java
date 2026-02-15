@@ -8,11 +8,16 @@ public enum CommandType {
     LED_TURN_ON,
     LED_TURN_OFF,
     
+    // Music/Audio Commands
+    SONG_PATTERN,
+    MUSIC_START,
+    MUSIC_STOP,
+
     // Device Commands
     DEVICE_STATUS,
     DEVICE_RESTART,
     DEVICE_UPDATE_FIRMWARE,
-    
+
     // Custom
     CUSTOM
 }

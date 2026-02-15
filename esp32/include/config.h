@@ -9,13 +9,13 @@
 // ============================================
 // WiFi Configuration
 // ============================================
-#define WIFI_SSID "Telekom-Jahiji_EXT"
-#define WIFI_PASSWORD "11112222"
+#define WIFI_SSID "Amar Jahiji's iPhone"
+#define WIFI_PASSWORD "12345678"
 
 // ============================================
 // MQTT Configuration
 // ============================================
-#define MQTT_BROKER_IP "192.168.1.19"  // Raspberry Pi IP address
+#define MQTT_BROKER_IP "172.20.10.5"  // Raspberry Pi IP address
 #define MQTT_BROKER_PORT 1883
 #define MQTT_CLIENT_ID "esp32-3led"
 
